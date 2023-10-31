@@ -19,7 +19,7 @@ import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 
-public class TextEditor extends JFrame implements ActionListener, CaretListener, AdjustmentListener, KeyListener {
+public class TextEditor extends JFrame implements ActionListener, CaretListener, ChangeListener, KeyListener {
 
 	ArrayList<JTextPane> textPanes = new ArrayList<JTextPane>();
 	//JTextPane textArea[];
@@ -52,13 +52,16 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 	int start;
 	int end;
 	boolean justSelected = false;
+	boolean doublingBlock = true;
+	String lastCopied = "";
 	
+	JScrollPane currentScrollPane;
 	JTextPane currentTextPane;
 
 	TextEditor() {
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		this.setTitle("Poop Text Editor");
-		this.setSize(700, 900);
+		this.setSize(1100, 1100);
 		this.setLayout(new BorderLayout());
 		this.setLocationRelativeTo(null);
 
@@ -79,44 +82,14 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 		StyleConstants.setFontFamily(attr, "Times New Roman");
 		
 		textPanes.get(0).setCharacterAttributes(attr, rootPaneCheckingEnabled);
-		//textPanes.get(0).setPreferredSize(new Dimension(620, 877));
 		textPanes.get(0).addCaretListener(this);
 		textPanes.get(0).addKeyListener(this);
-		/*textPanes.get(0).addCaretListener(new CaretListener() {
-
-			@Override
-			public void caretUpdate(CaretEvent e) {
-				
-				
-		});*/
 		
-		scrollPanes.add(new JScrollPane(textPanes.get(0), ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER));
+		scrollPanes.add(new JScrollPane(textPanes.get(0), ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER));
 		scrollPanes.get(0).setPreferredSize(new Dimension(620, 877));
-		scrollPanes.get(0).getVerticalScrollBar().addAdjustmentListener(this);
-		
-		//scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-		
-		//scrollPane = new JScrollPane(textArea);
-		//scrollPane.setPreferredSize(new Dimension(620, 877));
-		//scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
-		//scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		//scrollPane.getVerticalScrollBar().addAdjustmentListener(new AdjustmentListener() {
-		   // @Override
-		    //public void adjustmentValueChanged(AdjustmentEvent ae) {
-		        //int extent = scrollPane.getVerticalScrollBar().getModel().getExtent();
-		        //System.out.println("Value: " + (scrollPane.getVerticalScrollBar().getValue()+extent) + " Max: " + scrollPane.getVerticalScrollBar().getMaximum());
-		        //if(textArea.getText().length() > 0) {
-		        	//textArea.remove(textArea.getCaretPosition() - 2);
-					//try {
-						//int lastLineBreak = textArea.getDocument().getText(0, textArea.getDocument().getLength()).lastIndexOf('\n');
-						//textArea.getDocument().remove(lastLineBreak, textArea.getDocument().getLength() - lastLineBreak);
-					//} catch (BadLocationException e) {
-						//e.printStackTrace();
-					//}		        	
-		        //}
-		    //}
-		//});
-		
+		scrollPanes.get(0).getVerticalScrollBar().getModel().addChangeListener(this);
+		currentScrollPane = scrollPanes.get(0);
+				
 		mainScrollPane = new JScrollPane(bodyPanel);
 		mainScrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 		mainScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
@@ -218,7 +191,7 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 			Color color = colorChooser.showDialog(null, "Choose a color", Color.black);
 
-			currentTextPane.setForeground(color);
+			currentScrollPane.setForeground(color);
 		}
 
 		// ---------------------------------------------------------------------------------------------------------------------------
@@ -406,13 +379,24 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 	@Override
 	public void caretUpdate(CaretEvent e) {
-
-		
+				
 		JTextPane textArea = (JTextPane) e.getSource();
-		currentTextPane = textArea;
 		StyledDocument doc = textArea.getStyledDocument();
 		
-		//System.out.println(textArea.getCaretPosition());
+		currentTextPane = textArea;
+		int index = 0;
+
+		for (JTextPane element : textPanes) {
+
+			if (currentTextPane == element)
+				break;
+			
+			index++;
+		}
+
+		currentScrollPane = scrollPanes.get(index);
+
+		//System.out.println("Caret position: " + textArea.getCaretPosition());
 
 		if (textArea.getSelectedText() == null) {
 
@@ -477,6 +461,7 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 			start = textArea.getSelectionStart();
 			end = textArea.getSelectionEnd();
+			
 			attr.addAttribute(StyleConstants.Bold,
 					doc.getCharacterElement(start).getAttributes().getAttribute(StyleConstants.Bold));
 			attr.addAttribute(StyleConstants.Italic,
@@ -573,80 +558,125 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 		caretPosition = textArea.getCaretPosition();
 	}
-
+	
 	@Override
-	public void adjustmentValueChanged(AdjustmentEvent e) {
-
-		//System.out.println("Reached");
-
-		// JScrollPane scrollPane = (JScrollPane) e.getSource();
-		// int extent = scrollPane.getVerticalScrollBar().getModel().getExtent();
-		// System.out.println("Value: " + (scrollPane.getVerticalScrollBar().getValue()
-		// + extent) + " Max: " + scrollPane.getVerticalScrollBar().getMaximum());
-
-		if (currentTextPane.getText().length() > 0) {
-
-			if (currentTextPane == textPanes.get(textPanes.size() - 1)) {
+	public void stateChanged(ChangeEvent e) {
 				
-				try {
-					int lastLineBreak = currentTextPane.getDocument()
-							.getText(1, currentTextPane.getDocument().getLength()).lastIndexOf('\n');
-					System.out.println(currentTextPane.getDocument().getText(lastLineBreak, currentTextPane.getDocument().getLength() - lastLineBreak));
-					currentTextPane.getDocument().remove(lastLineBreak,
-							currentTextPane.getDocument().getLength() - lastLineBreak);
-
-					JTextPane newTextPane = new JTextPane();
-					newTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
-					newTextPane.addCaretListener(this);
-					newTextPane.addKeyListener(this);
-					textPanes.add(newTextPane);
-					currentTextPane = newTextPane;
-
-					JScrollPane newScrollPane = new JScrollPane(newTextPane,
-							ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-							ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-					scrollPanes.add(newScrollPane);
-					newScrollPane.setPreferredSize(new Dimension(620, 877));
-					newScrollPane.getVerticalScrollBar().addAdjustmentListener(this);
-
-					bodyPanel.add(newScrollPane);
-
-					SwingUtilities.updateComponentTreeUI(this);
-					
-					currentTextPane.requestFocus();
-
-				} catch (BadLocationException e1) {
-					e1.printStackTrace();
-				}
-				
-			} else {
-
-				System.out.println("Not last");
-				
-				try {
-					int lastLineBreak = currentTextPane.getDocument().getText(0, currentTextPane.getDocument().getLength()).lastIndexOf('\n');
-					currentTextPane.getDocument().remove(lastLineBreak, currentTextPane.getDocument().getLength() - lastLineBreak);
-				} catch (BadLocationException e1) {
-					e1.printStackTrace();
-				}
-			}
+		/*if(doublingBlock) {
+			doublingBlock = false;
+			return;
 		}
+		doublingBlock = true;*/
+		
+		
+		BoundedRangeModel model = (BoundedRangeModel) e.getSource();
+		int extent = model.getExtent();
+		int maximum = model.getMaximum();
+		int value = model.getValue();
+		
+		if(value <= 0 && extent >= maximum)
+			return;
+		
+		//-------------------------------------------------------------------------------
+		JScrollPane tempScrollPane;
+		JTextPane tempTextPane;
+		int index = 0;
+		
+		for (JScrollPane element : scrollPanes) {
+							
+			if(e.getSource() == element.getVerticalScrollBar().getModel()) {
+				tempScrollPane = element;	
+				break;
+			}
+			index++;
+		}
+		
+		tempTextPane = textPanes.get(index);
+		
+		if(tempTextPane.getText().equals(lastCopied))
+			return;
+		
+		//-------------------------------------------------------------------------------
+		
+		int lastLineBreak;
+		String copy = "";
+		try {		
+			lastLineBreak = tempTextPane.getDocument().getText(0, tempTextPane.getDocument().getLength())
+					.lastIndexOf('\n');
+		
+			System.out.println(tempTextPane.getStyledDocument().getText(lastLineBreak + 1,
+					tempTextPane.getDocument().getLength() - lastLineBreak - 1));
+			
+			copy = tempTextPane.getStyledDocument().getText(lastLineBreak + 1,
+					tempTextPane.getDocument().getLength() - lastLineBreak - 1);
+			
+			lastCopied = copy;
+		
+			tempTextPane.getDocument().remove(lastLineBreak,
+					tempTextPane.getDocument().getLength() - lastLineBreak);
+			
+		} catch (BadLocationException e1) {
+			
+			System.out.println("Error on index: " + index);
+			e1.printStackTrace();
+		}
+		
+		//System.out.println(copy);
+		//-------------------------------------------------------------------------------
+		
+		if(index == textPanes.size() - 1) {
+					
+			//System.out.println("Creating new page");
+			
+			JTextPane newTextPane = new JTextPane();
+			newTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
+			newTextPane.addCaretListener(this);
+			newTextPane.addKeyListener(this);
+			textPanes.add(newTextPane);
 
+			JScrollPane newScrollPane = new JScrollPane(newTextPane,
+					ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+					ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+			newScrollPane.setPreferredSize(new Dimension(620, 877));
+			scrollPanes.add(newScrollPane);
+			
+			bodyPanel.add(newScrollPane);
+
+			//currentTextPane.setText(copy);
+			newScrollPane.getVerticalScrollBar().getModel().addChangeListener(this);
+		
+			SwingUtilities.invokeLater(new Runnable() {
+			       public void run() {
+			         SwingUtilities.updateComponentTreeUI(bodyPanel);
+			         pack();
+			        }
+			      });
+		
+			currentScrollPane = newScrollPane;
+			currentTextPane = newTextPane;
+			currentTextPane.requestFocus();
+		}
+		
+		//System.out.println("Transfering text to index: " + (index + 1));
+		textPanes.get(index + 1).setText(copy + textPanes.get(index + 1).getText());
+		//textPanes.get(index + 1).select(0, copy.length());       //getText(0, copy.length())
+		//textPanes.get(index + 1).setCharacterAttributes(attr, rootPaneCheckingEnabled);
 	}
-
+	
 	@Override
 	public void keyPressed(KeyEvent e) {
 		
-		if((e.getKeyCode() == KeyEvent.VK_BACK_SPACE || e.getKeyCode() == KeyEvent.VK_DELETE) && textPanes.size() > 1) {
+		if((e.getKeyCode() == KeyEvent.VK_BACK_SPACE || e.getKeyCode() == KeyEvent.VK_DELETE) && textPanes.size() > 1 && currentTextPane.getText().length() == 0) {
 			
 			textPanes.remove(textPanes.size() - 1);
 			scrollPanes.remove(scrollPanes.size() - 1);
 			bodyPanel.remove(bodyPanel.getComponentCount() - 1);
 			
+			currentScrollPane = scrollPanes.get(scrollPanes.size() - 1);
 			currentTextPane = textPanes.get(textPanes.size() - 1);
-			
+						
 			SwingUtilities.updateComponentTreeUI(this);
-			currentTextPane.requestFocus();
+			currentScrollPane.requestFocus();
 			
 		}
 		
@@ -654,13 +684,9 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 	@Override
 	public void keyTyped(KeyEvent e) {
-		// TODO Auto-generated method stub
-		
 	}
 
 	@Override
 	public void keyReleased(KeyEvent e) {
-		// TODO Auto-generated method stub
-		
-	}
+	}	
 }
