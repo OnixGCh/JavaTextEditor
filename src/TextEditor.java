@@ -1,4 +1,5 @@
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
 import java.awt.event.*;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -6,20 +7,27 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import javax.swing.*;
+import javax.swing.border.Border;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
 import javax.swing.event.*;
 import javax.swing.filechooser.*;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.Document;
 import javax.swing.text.EditorKit;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyleConstants.ColorConstants;
 import javax.swing.text.StyledDocument;
+import javax.swing.text.StyledEditorKit;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.rtf.RTFEditorKit;
 
-public class TextEditor extends JFrame implements ActionListener, CaretListener, ChangeListener, KeyListener {
+public class TextEditor<Mediator> extends JFrame implements ActionListener, CaretListener, ChangeListener, KeyListener {
 
 	ArrayList<JTextPane> textPanes = new ArrayList<JTextPane>();
 	//JTextPane textArea[];
@@ -27,12 +35,20 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 	ArrayList<JScrollPane> scrollPanes = new ArrayList<JScrollPane>();
 	JScrollPane mainScrollPane;
 	JLabel fontLabel;
+	JLabel fontIndentLabel;
+	JLabel lineSpacingLabel;
 	JSpinner fontSizeSpinner;
 	JTextField fontSizeSpinnerTextField;
+	JSpinner fontIndentSpinner;
+	JTextField fontIndentSpinnerTextField;
+	JSpinner lineSpacingSpinner;
+	JTextField lineSpacingSpinnerTextField;
 	JButton fontColorButton;
 	JButton fontBoldButton;
 	JButton fontItalicButton;
 	JButton fontUnderlineButton;
+	JButton imageButton;
+	JButton hyperlinkButton;
 	JComboBox<?> fontFamilyBox;
 	JTextField fontFamilyBoxTextField;
 	JPanel headerPanel;
@@ -52,7 +68,6 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 	int start;
 	int end;
 	boolean justSelected = false;
-	boolean doublingBlock = true;
 	String lastCopied = "";
 	
 	JScrollPane currentScrollPane;
@@ -61,10 +76,8 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 	TextEditor() {
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		this.setTitle("Poop Text Editor");
-		this.setSize(1100, 1100);
 		this.setLayout(new BorderLayout());
-		this.setLocationRelativeTo(null);
-
+		
 		headerPanel = new JPanel();
 		headerPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 15));
 		headerPanel.setBackground(new Color(255, 255, 255));
@@ -74,28 +87,35 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 		bodyPanel.setLayout(new FlowLayout());
 		bodyPanel.setBackground(new Color(230, 230, 230));
 		
-		textPanes.add(new JTextPane());
-		currentTextPane = textPanes.get(0);
-				
-		attr = new SimpleAttributeSet();
-		StyleConstants.setFontSize(attr, 14);
-		StyleConstants.setFontFamily(attr, "Times New Roman");
-		
-		textPanes.get(0).setCharacterAttributes(attr, rootPaneCheckingEnabled);
-		textPanes.get(0).addCaretListener(this);
-		textPanes.get(0).addKeyListener(this);
-		
-		scrollPanes.add(new JScrollPane(textPanes.get(0), ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER));
-		scrollPanes.get(0).setPreferredSize(new Dimension(620, 877));
-		scrollPanes.get(0).getVerticalScrollBar().getModel().addChangeListener(this);
-		currentScrollPane = scrollPanes.get(0);
-				
 		mainScrollPane = new JScrollPane(bodyPanel);
 		mainScrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 		mainScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
 		
-		fontLabel = new JLabel("Font: ");
+		attr = new SimpleAttributeSet();
+		StyleConstants.setFontSize(attr, 14);
+		StyleConstants.setFontFamily(attr, "Times New Roman");
+		StyleConstants.setBold(attr, false);
+		StyleConstants.setItalic(attr, false);
+		StyleConstants.setUnderline(attr, false);
+		StyleConstants.setLeftIndent(attr, 0f);
+		StyleConstants.setLineSpacing(attr, 0f);
+		
+		CreateNewPage(1);
+		
+		//------------------------------------------------------------------------------------------------------
 
+		fontColorButton = new JButton("Color");
+		fontColorButton.addActionListener(this);
+		fontColorButton.setBackground(new Color(255, 255, 255));
+		
+		String[] fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames();
+
+		fontFamilyBox = new JComboBox<Object>(fonts);
+		fontFamilyBox.addActionListener(this);
+		fontFamilyBox.setEditable(true);
+		fontFamilyBox.setSelectedItem("Times New Roman");
+		fontFamilyBoxTextField = (JTextField)fontFamilyBox.getEditor().getEditorComponent();
+				
 		fontSizeSpinner = new JSpinner();
 		fontSizeSpinner.setPreferredSize(new Dimension(50, 25));
 		fontSizeSpinner.setValue(14);
@@ -109,7 +129,9 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 					
 					fontSizeSpinnerTextField.setForeground(null);
 					StyleConstants.setFontSize(attr, (int) fontSizeSpinner.getValue());
-					currentTextPane.setCharacterAttributes(attr, Boolean.TRUE);
+					try {
+						currentTextPane.setCharacterAttributes(attr, Boolean.TRUE);
+					} catch (NullPointerException e1) {}
 		
 				} else {
 					justSelected = false;
@@ -117,10 +139,6 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 			}
 
 		});
-
-		fontColorButton = new JButton("Color");
-		fontColorButton.addActionListener(this);
-		fontColorButton.setBackground(new Color(255, 255, 255));
 		
 		fontBoldButton = new JButton("Bold");
 		fontBoldButton.addActionListener(this);
@@ -133,14 +151,74 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 		fontUnderlineButton = new JButton("Underline");
 		fontUnderlineButton.addActionListener(this);
 		fontUnderlineButton.setBackground(new Color(255, 255, 255));
+		
+		imageButton = new JButton("Image...");
+		imageButton.addActionListener(this);
+		imageButton.setBackground(new Color(255, 255, 255));
+		
+		hyperlinkButton = new JButton("Link");
+		hyperlinkButton.addActionListener(this);
+		hyperlinkButton.setBackground(new Color(255, 255, 255));
+		
+		fontIndentLabel = new JLabel("Indent:");
+		fontIndentLabel.setFont(new Font("Arial", Font.PLAIN, 16));
+			
+		fontIndentSpinner = new JSpinner();
+		fontIndentSpinner.setPreferredSize(new Dimension(50, 25));
+		fontIndentSpinner.setValue(0f);
+		fontIndentSpinnerTextField = ((JSpinner.DefaultEditor)fontIndentSpinner.getEditor()).getTextField();
+		fontIndentSpinner.addChangeListener(new ChangeListener() {
 
-		String[] fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames();
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				
+				if (justSelected != true) {
+					
+					fontIndentSpinnerTextField.setForeground(null);
+					StyleConstants.setLeftIndent(attr,  Float.valueOf(String.valueOf(fontIndentSpinner.getValue())));					
+					try {
+						currentTextPane.setParagraphAttributes(attr, Boolean.TRUE);
+					} catch (NullPointerException e1) {}
+		
+				} else {
+					justSelected = false;
+				}
+			}
 
-		fontFamilyBox = new JComboBox<Object>(fonts);
-		fontFamilyBox.addActionListener(this);
-		fontFamilyBox.setEditable(true);
-		fontFamilyBox.setSelectedItem("Times New Roman");
-		fontFamilyBoxTextField = (JTextField)fontFamilyBox.getEditor().getEditorComponent();
+		});
+		
+		lineSpacingLabel = new JLabel("Line spacing:");
+		lineSpacingLabel.setFont(new Font("Arial", Font.PLAIN, 16));
+		
+		SpinnerModel model = new SpinnerNumberModel(0, 0, 10, 0.1f);
+		lineSpacingSpinner = new JSpinner();
+		lineSpacingSpinner.setPreferredSize(new Dimension(50, 25));
+		lineSpacingSpinner.setValue(0f);
+		lineSpacingSpinner.setModel(model);
+		lineSpacingSpinnerTextField = ((JSpinner.DefaultEditor)fontIndentSpinner.getEditor()).getTextField();
+		lineSpacingSpinner.addChangeListener(new ChangeListener() {
+
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				
+				if (justSelected != true) {
+					
+					lineSpacingSpinnerTextField.setForeground(null);
+					StyleConstants.setLineSpacing(attr, Float.valueOf(String.valueOf(lineSpacingSpinner.getValue())));
+					//currentTextPane.select(start, end);
+					try {
+						currentTextPane.setParagraphAttributes(attr, Boolean.TRUE);
+					} catch (NullPointerException e1) {}
+					
+		
+				} else {
+					justSelected = false;
+				}
+			}
+
+		});
+		
+		
 
 		// ----- menubar -----
 
@@ -175,11 +253,16 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 		headerPanel.add(fontBoldButton);
 		headerPanel.add(fontItalicButton);
 		headerPanel.add(fontUnderlineButton);
+		headerPanel.add(fontIndentLabel);
+		headerPanel.add(fontIndentSpinner);
+		headerPanel.add(lineSpacingLabel);
+		headerPanel.add(lineSpacingSpinner);
+		headerPanel.add(imageButton);
+		//headerPanel.add(hyperlinkButton);
 		
-		this.add(mainScrollPane, BorderLayout.CENTER);
-		//bodyPanel.add(mainScrollPane, BorderLayout.CENTER);
-		bodyPanel.add(scrollPanes.get(0));
-		
+		this.add(mainScrollPane, BorderLayout.CENTER);		
+		this.setSize(1100, 1100);
+		this.setLocationRelativeTo(null);
 		this.setVisible(true);
 	}
 
@@ -204,8 +287,10 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 				if (fontFamilyBoxTextField != null)
 					fontFamilyBoxTextField.setForeground(null);
-				StyleConstants.setFontFamily(attr, (String) fontFamilyBox.getSelectedItem());
-				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
+				StyleConstants.setFontFamily(attr, (String) fontFamilyBox.getSelectedItem());				
+				try {
+					currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
+				} catch (NullPointerException e1) {}
 
 			} else {
 				justSelected = false;
@@ -221,16 +306,16 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 			if (fontBoldButton.getBackground().equals(new Color(255, 255, 255))) {
 
 				fontBoldButton.setBackground(new Color(230, 230, 230));
-				StyleConstants.setBold(attr, true);
-				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
-
+				StyleConstants.setBold(attr, true);							
 			} else {
 
 				fontBoldButton.setBackground(new Color(255, 255, 255));
 				StyleConstants.setBold(attr, false);
-				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
 			}
-
+			
+			try {
+				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
+			} catch (NullPointerException e1) {}
 		}
 
 		// ---------------------------------------------------------------------------------------------------------------------------
@@ -243,14 +328,15 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 				fontItalicButton.setBackground(new Color(230, 230, 230));
 				StyleConstants.setItalic(attr, true);
-				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
-
 			} else {
 
 				fontItalicButton.setBackground(new Color(255, 255, 255));
 				StyleConstants.setItalic(attr, false);
-				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
 			}
+			
+			try {
+				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
+			} catch (NullPointerException e1) {}
 		}
 
 		// ---------------------------------------------------------------------------------------------------------------------------
@@ -263,14 +349,55 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 				fontUnderlineButton.setBackground(new Color(230, 230, 230));
 				StyleConstants.setUnderline(attr, true);
-				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
-
 			} else {
 
 				fontUnderlineButton.setBackground(new Color(255, 255, 255));
-				StyleConstants.setUnderline(attr, false);
-				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
+				StyleConstants.setUnderline(attr, false);				
 			}
+			
+			try {
+				currentTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
+			} catch (NullPointerException e1) {}
+		}
+		
+		// ---------------------------------------------------------------------------------------------------------------------------
+		// ----------------------IMAGE-------------------------------------------------------------------------------------
+		// ---------------------------------------------------------------------------------------------------------------------------
+
+		if (e.getSource() == imageButton) {
+
+			JFileChooser fileChooser = new JFileChooser();
+			fileChooser.setCurrentDirectory(new File("."));
+			FileNameExtensionFilter filter = new FileNameExtensionFilter("Image files", "png", "Image files", "jpg");
+			fileChooser.setFileFilter(filter);
+
+			int response = fileChooser.showOpenDialog(null);
+
+			if (response == JFileChooser.APPROVE_OPTION) {
+				InputStream file = null;
+
+				currentTextPane.insertIcon ( new ImageIcon (fileChooser.getSelectedFile().getAbsolutePath()) );				
+			}
+		}
+		
+		// ---------------------------------------------------------------------------------------------------------------------------
+		// ----------------------LINK-------------------------------------------------------------------------------------
+		// ---------------------------------------------------------------------------------------------------------------------------
+
+		if (e.getSource() == hyperlinkButton) {
+			
+			HTMLEditorKit htmlkit = new HTMLEditorKit();
+			currentTextPane.setEditorKit(htmlkit);
+			try {
+				htmlkit.insertHTML((HTMLDocument)currentTextPane.getDocument(), 0, "<html> Website : <a href=\"\">http://www.google.com/</a></html>", 0, 0, null);
+			} catch (BadLocationException | IOException e1) {
+				e1.printStackTrace();
+			}
+			
+			EditorKit kit = new StyledEditorKit();
+			currentTextPane.setEditorKit(kit);
+			//currentTextPane.setText("<html> Website : <a href=\"\">http://www.google.com/</a></html>");
+			//currentTextPane.insertIcon(new ImageIcon(fileChooser.getSelectedFile().getAbsolutePath()));
 		}
 
 		// ---------------------------------------------------------------------------------------------------------------------------
@@ -278,18 +405,22 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		if (e.getSource() == newItem) {
-
-			currentTextPane.setText("");
+			
+			bodyPanel.removeAll();
+			textPanes.removeAll(textPanes);
+			scrollPanes.removeAll(scrollPanes);
 
 			StyleConstants.setFontSize(attr, 14);
 			StyleConstants.setFontFamily(attr, "Times New Roman");
-			attr.removeAttribute(StyleConstants.Bold);
-			attr.removeAttribute(StyleConstants.Italic);
-			attr.removeAttribute(StyleConstants.Underline);
+			StyleConstants.setBold(attr, false);
+			attr.addAttribute(StyleConstants.Bold, false);
+			attr.addAttribute(StyleConstants.Italic, false);
+			attr.addAttribute(StyleConstants.Underline, false);
+			attr.addAttribute(StyleConstants.LeftIndent, 0f);
+			attr.addAttribute(StyleConstants.LineSpacing, 0f);
 			attr.removeAttribute(StyleConstants.Foreground);
 
-			currentTextPane.setCharacterAttributes(attr, true);
-
+			CreateNewPage(1);
 		}
 
 		// ---------------------------------------------------------------------------------------------------------------------------
@@ -297,6 +428,7 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 		// ---------------------------------------------------------------------------------------------------------------------------
 
 		if (e.getSource() == openItem) {
+			
 			JFileChooser fileChooser = new JFileChooser();
 			fileChooser.setCurrentDirectory(new File("."));
 			FileNameExtensionFilter filter = new FileNameExtensionFilter("Text files", "txt");
@@ -379,7 +511,7 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 	@Override
 	public void caretUpdate(CaretEvent e) {
-				
+		
 		JTextPane textArea = (JTextPane) e.getSource();
 		StyledDocument doc = textArea.getStyledDocument();
 		
@@ -395,31 +527,57 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 		}
 
 		currentScrollPane = scrollPanes.get(index);
-
-		//System.out.println("Caret position: " + textArea.getCaretPosition());
+		
+		//System.out.println("Caret: " + currentTextPane.getCaretPosition());
 
 		if (textArea.getSelectedText() == null) {
 
 			if (textArea.getText().length() > 0 && textArea.getCaretPosition() != caretPosition) {
+				
+				start = textArea.getCaretPosition();
+				end = textArea.getCaretPosition();
 
 				attr.addAttribute(StyleConstants.Bold, doc.getCharacterElement(textArea.getCaretPosition() - 1)
 						.getAttributes().getAttribute(StyleConstants.Bold));
 				attr.addAttribute(StyleConstants.Italic, doc.getCharacterElement(textArea.getCaretPosition() - 1)
-						.getAttributes().getAttribute(StyleConstants.Italic));
-				Object und = doc.getCharacterElement(textArea.getCaretPosition() - 1).getAttributes()
-						.getAttribute(StyleConstants.Underline);
-				if (und == null)
-					attr.addAttribute(StyleConstants.Underline, false);
-				else
-					attr.addAttribute(StyleConstants.Underline, doc.getCharacterElement(textArea.getCaretPosition() - 1)
+						.getAttributes().getAttribute(StyleConstants.Italic));			
+				attr.addAttribute(StyleConstants.Underline, doc.getCharacterElement(textArea.getCaretPosition() - 1)
 							.getAttributes().getAttribute(StyleConstants.Underline));
+				
+				//---------------------------------------------------------------------------------------------------------------------
 
 				// FONT SIZE
 				justSelected = true;
 				fontSizeSpinnerTextField.setForeground(null);
-				fontSizeSpinner
-						.setValue(textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
-								.getAttributes().getAttribute(StyleConstants.FontSize));
+				if(textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
+								.getAttributes().getAttribute(StyleConstants.FontSize) != null)
+					fontSizeSpinner
+							.setValue(textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
+									.getAttributes().getAttribute(StyleConstants.FontSize));
+				else
+					fontSizeSpinnerTextField.setForeground(new Color(255, 255, 255));
+				
+				// FONT INDENT
+				justSelected = true;
+				fontIndentSpinnerTextField.setForeground(null);
+				if(textArea.getStyledDocument().getParagraphElement(textArea.getCaretPosition() - 1)
+								.getAttributes().getAttribute(StyleConstants.LeftIndent) != null)
+					fontIndentSpinner
+								.setValue(Float.valueOf(String.valueOf(textArea.getStyledDocument().getParagraphElement(textArea.getCaretPosition() - 1)
+								.getAttributes().getAttribute(StyleConstants.LeftIndent))));
+				else
+					fontIndentSpinnerTextField.setForeground(new Color(255, 255, 255));
+				
+				// LINE SPACING
+				justSelected = true;
+				lineSpacingSpinnerTextField.setForeground(null);
+				if(textArea.getStyledDocument().getParagraphElement(textArea.getCaretPosition() - 1)
+									.getAttributes().getAttribute(StyleConstants.LineSpacing) != null)
+					lineSpacingSpinner
+							.setValue(Float.valueOf(String.valueOf(textArea.getStyledDocument().getParagraphElement(textArea.getCaretPosition() - 1)
+									.getAttributes().getAttribute(StyleConstants.LineSpacing))));
+				else
+					lineSpacingSpinnerTextField.setForeground(new Color(255, 255, 255));
 
 				// FONT FAMILY
 				justSelected = true;
@@ -429,32 +587,40 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 								.getAttributes().getAttribute(StyleConstants.FontFamily));
 
 				// FONT BOLD
-				if ((Boolean) textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
-						.getAttributes().getAttribute(StyleConstants.Bold)) {
-					fontBoldButton.setBackground(new Color(230, 230, 230));
-				} else {
+				if(textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
+						.getAttributes().getAttribute(StyleConstants.Bold) != null)
+					if ((Boolean) textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
+							.getAttributes().getAttribute(StyleConstants.Bold)) {
+						fontBoldButton.setBackground(new Color(230, 230, 230));
+					} else {
+						fontBoldButton.setBackground(new Color(255, 255, 255));
+					}
+				else
 					fontBoldButton.setBackground(new Color(255, 255, 255));
-				}
 
 				// FONT ITALIC
-				if ((Boolean) textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
-						.getAttributes().getAttribute(StyleConstants.Italic)) {
-					fontItalicButton.setBackground(new Color(230, 230, 230));
-				} else {
+				if(textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
+						.getAttributes().getAttribute(StyleConstants.Italic) != null)
+					if ((Boolean) textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
+							.getAttributes().getAttribute(StyleConstants.Italic)) {
+						fontItalicButton.setBackground(new Color(230, 230, 230));
+					} else {
+						fontItalicButton.setBackground(new Color(255, 255, 255));
+					}
+				else
 					fontItalicButton.setBackground(new Color(255, 255, 255));
-				}
 
 				// FONT UNDERLINE
-				if (textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1).getAttributes()
-						.getAttribute(StyleConstants.Underline) == null)
-					fontUnderlineButton.setBackground(new Color(255, 255, 255));
-				else {
+				if(textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
+						.getAttributes().getAttribute(StyleConstants.Underline) != null)
 					if ((Boolean) textArea.getStyledDocument().getCharacterElement(textArea.getCaretPosition() - 1)
 							.getAttributes().getAttribute(StyleConstants.Underline))
 						fontUnderlineButton.setBackground(new Color(230, 230, 230));
 					else
 						fontUnderlineButton.setBackground(new Color(255, 255, 255));
-				}
+				else
+					fontUnderlineButton.setBackground(new Color(255, 255, 255));
+
 			}
 
 		} else {
@@ -462,21 +628,23 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 			start = textArea.getSelectionStart();
 			end = textArea.getSelectionEnd();
 			
+			//---------------------------------------------------------------------------------------------------------------------
+			
 			attr.addAttribute(StyleConstants.Bold,
 					doc.getCharacterElement(start).getAttributes().getAttribute(StyleConstants.Bold));
 			attr.addAttribute(StyleConstants.Italic,
 					doc.getCharacterElement(start).getAttributes().getAttribute(StyleConstants.Italic));
-			Object und = doc.getCharacterElement(start).getAttributes().getAttribute(StyleConstants.Underline);
-			if (und == null)
-				attr.addAttribute(StyleConstants.Underline, false);
-			else
-				attr.addAttribute(StyleConstants.Underline,
+			attr.addAttribute(StyleConstants.Underline,
 						doc.getCharacterElement(start).getAttributes().getAttribute(StyleConstants.Underline));
-
+			
+			//---------------------------------------------------------------------------------------------------------------------
+			
 			// FONT SIZE
 			justSelected = true;
 			fontSizeSpinnerTextField.setForeground(null);
-			int fontSize = (int) doc.getCharacterElement(start).getAttributes().getAttribute(StyleConstants.FontSize);
+			int fontSize = 0;
+			if(doc.getCharacterElement(start).getAttributes().getAttribute(StyleConstants.FontSize) != null)
+				fontSize = (int) doc.getCharacterElement(start).getAttributes().getAttribute(StyleConstants.FontSize);
 			fontSizeSpinner.setValue(fontSize);
 
 			for (int i = start + 1; i < end; i++) {
@@ -486,6 +654,42 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 					break;
 				}
 			}
+			
+			// FONT INDENT
+			justSelected = true;
+			fontIndentSpinnerTextField.setForeground(null);
+			float fontIndent = 0f;
+			if (doc.getParagraphElement(start).getAttributes().getAttribute(StyleConstants.LeftIndent) != null)
+				fontIndent = Float.valueOf(String.valueOf(
+						doc.getParagraphElement(start).getAttributes().getAttribute(StyleConstants.LeftIndent)));
+			fontIndentSpinner.setValue(fontIndent);
+			
+			if(doc.getParagraphElement(start).getAttributes().getAttribute(StyleConstants.LeftIndent) != null)
+				for (int i = start + 1; i < end; i++) {
+					if (Float.valueOf(String.valueOf(doc.getParagraphElement(i).getAttributes()
+							.getAttribute(StyleConstants.LeftIndent))) != fontIndent) {
+						fontIndentSpinnerTextField.setForeground(Color.white);
+						break;
+					}
+				}
+			
+			// LINE SPACING
+			justSelected = true;
+			lineSpacingSpinnerTextField.setForeground(null);
+			float lineSpacing = 0f;
+			if (doc.getParagraphElement(start).getAttributes().getAttribute(StyleConstants.LineSpacing) != null)
+				lineSpacing = Float.valueOf(String.valueOf(
+						doc.getParagraphElement(start).getAttributes().getAttribute(StyleConstants.LineSpacing)));				
+			lineSpacingSpinner.setValue(lineSpacing);
+
+			if(doc.getParagraphElement(start).getAttributes().getAttribute(StyleConstants.LineSpacing) != null)
+				for (int i = start + 1; i < end; i++) {
+					if (Float.valueOf(String.valueOf(doc.getParagraphElement(i).getAttributes()
+							.getAttribute(StyleConstants.LineSpacing))) != lineSpacing) {
+						lineSpacingSpinnerTextField.setForeground(Color.white);
+						break;
+					}
+				}
 
 			// FONT FAMILY
 			justSelected = true;
@@ -561,14 +765,7 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 	
 	@Override
 	public void stateChanged(ChangeEvent e) {
-				
-		/*if(doublingBlock) {
-			doublingBlock = false;
-			return;
-		}
-		doublingBlock = true;*/
-		
-		
+			
 		BoundedRangeModel model = (BoundedRangeModel) e.getSource();
 		int extent = model.getExtent();
 		int maximum = model.getMaximum();
@@ -604,16 +801,19 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 			lastLineBreak = tempTextPane.getDocument().getText(0, tempTextPane.getDocument().getLength())
 					.lastIndexOf('\n');
 		
-			System.out.println(tempTextPane.getStyledDocument().getText(lastLineBreak + 1,
-					tempTextPane.getDocument().getLength() - lastLineBreak - 1));
+			
+			/*System.out.println(tempTextPane.getStyledDocument().getText(lastLineBreak + 1,
+					tempTextPane.getDocument().getLength() - lastLineBreak - 1));*/
 			
 			copy = tempTextPane.getStyledDocument().getText(lastLineBreak + 1,
-					tempTextPane.getDocument().getLength() - lastLineBreak - 1);
+					tempTextPane.getDocument().getLength() - lastLineBreak);
 			
 			lastCopied = copy;
 		
 			tempTextPane.getDocument().remove(lastLineBreak,
 					tempTextPane.getDocument().getLength() - lastLineBreak);
+			
+			//System.out.println("Lenth: " + tempTextPane.getDocument().getLength());
 			
 		} catch (BadLocationException e1) {
 			
@@ -621,46 +821,16 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 			e1.printStackTrace();
 		}
 		
-		//System.out.println(copy);
 		//-------------------------------------------------------------------------------
 		
 		if(index == textPanes.size() - 1) {
 					
 			//System.out.println("Creating new page");
-			
-			JTextPane newTextPane = new JTextPane();
-			newTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
-			newTextPane.addCaretListener(this);
-			newTextPane.addKeyListener(this);
-			textPanes.add(newTextPane);
-
-			JScrollPane newScrollPane = new JScrollPane(newTextPane,
-					ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-					ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-			newScrollPane.setPreferredSize(new Dimension(620, 877));
-			scrollPanes.add(newScrollPane);
-			
-			bodyPanel.add(newScrollPane);
-
-			//currentTextPane.setText(copy);
-			newScrollPane.getVerticalScrollBar().getModel().addChangeListener(this);
-		
-			SwingUtilities.invokeLater(new Runnable() {
-			       public void run() {
-			         SwingUtilities.updateComponentTreeUI(bodyPanel);
-			         pack();
-			        }
-			      });
-		
-			currentScrollPane = newScrollPane;
-			currentTextPane = newTextPane;
-			currentTextPane.requestFocus();
+			CreateNewPage(index + 2);		
 		}
 		
 		//System.out.println("Transfering text to index: " + (index + 1));
 		textPanes.get(index + 1).setText(copy + textPanes.get(index + 1).getText());
-		//textPanes.get(index + 1).select(0, copy.length());       //getText(0, copy.length())
-		//textPanes.get(index + 1).setCharacterAttributes(attr, rootPaneCheckingEnabled);
 	}
 	
 	@Override
@@ -682,11 +852,132 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 		
 	}
 
+	public void CreateNewPage(int pageNumber) {
+		
+		JTextPane newTextPane = new JTextPane();
+		newTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
+		newTextPane.addCaretListener(this);
+		newTextPane.addKeyListener(this);
+		newTextPane.setEditable(true);
+		
+		Action action = new AbstractAction() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				
+				//System.out.println(newTextPane.getSelectedText());
+				
+				try 
+			    {
+			        //Clipboard clpbrd = Toolkit.getDefaultToolkit().getSystemClipboard();
+					RTFEditorKit rtfek = new RTFEditorKit();
+					HTMLEditorKit kit = new HTMLEditorKit();
+					
+			        ByteArrayOutputStream bos  = new ByteArrayOutputStream();
+			        Writer writer = new StringWriter();
+			        
+			        rtfek.write ( bos, newTextPane.getStyledDocument(), 0, 0);
+			        kit.write ( writer, newTextPane.getStyledDocument(), 0, 0);
+			        
+			        System.out.println(writer.toString());
+			        
+			        ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
+			        
+			        newTextPane.setText("");
+			        
+			        rtfek.read(bis, newTextPane.getStyledDocument(), 0);
+			        bos.flush();
+			    }
+			    catch ( IOException | BadLocationException e1 ) 
+			    {
+			        e1.printStackTrace();
+			    }
+				
+			}};
+		KeyStroke keyStroke = KeyStroke.getKeyStroke("control C");
+		InputMap im = newTextPane.getInputMap();
+		newTextPane.getActionMap().put(im.get(keyStroke), action);
+		/*newTextPane.addHyperlinkListener(new HyperlinkListener() {
+
+            @Override
+            public void hyperlinkUpdate(HyperlinkEvent e) {
+            	
+            	System.out.println("YAY");
+            	
+                if (!HyperlinkEvent.EventType.ACTIVATED.equals(e.getEventType()))
+                    return;
+                if ("action:close".equals(e.getDescription())) {
+                	
+                } else {
+                    if (Desktop.isDesktopSupported()) {
+                        try {
+                            Desktop.getDesktop().browse(e.getURL().toURI());
+                        } catch (Exception ignore) {
+                        }
+                    }
+                }
+            }
+        });*/
+		textPanes.add(newTextPane);
+		
+		EditorKit kit = new StyledEditorKit();
+		newTextPane.setEditorKit(kit);
+
+		Border emptyBorder = new EmptyBorder(0, 0, 0, 0);
+		Border lineBorder = new LineBorder(Color.white, 0) {
+			@Override
+			public void paintBorder(final Component c, final Graphics g, final int x, final int y, final int width,
+					final int height) {
+				// super.paintBorder(c, g, x, y, width, height);
+				final boolean doSimple = true;
+				if (doSimple) {
+					g.setColor(Color.white);
+					g.fillRect(x, y, width, height);
+				}
+			}
+		};
+		Border border = new CompoundBorder(emptyBorder, lineBorder);
+		
+		JScrollPane newScrollPane = new JScrollPane(newTextPane,
+				ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER,
+				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		newScrollPane.setPreferredSize(new Dimension(620, 877));
+		newScrollPane.setBorder(border);
+		scrollPanes.add(newScrollPane);
+		
+		JPanel newPanel = new JPanel();
+		newPanel.setPreferredSize(new Dimension(620, 920));
+		newPanel.setBackground(Color.white);
+		newPanel.setLayout(new FlowLayout(FlowLayout.LEADING, 0, 0));
+		
+		JLabel newLabel = new JLabel(String.valueOf(pageNumber));
+		newLabel.setForeground(Color.black);
+		newLabel.setFont(new Font("Arial", Font.PLAIN, 24));
+		newLabel.setBorder(new EmptyBorder(5, 580, 5, 5));
+		
+		newPanel.add(newScrollPane);
+		newPanel.add(newLabel);
+		bodyPanel.add(newPanel);
+
+		newScrollPane.getVerticalScrollBar().getModel().addChangeListener(this);
+	
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				SwingUtilities.updateComponentTreeUI(bodyPanel);
+				pack();
+			}
+		});
+	
+		currentScrollPane = newScrollPane;
+		currentTextPane = newTextPane;
+		currentTextPane.requestFocus();
+	}
+	
 	@Override
 	public void keyTyped(KeyEvent e) {
 	}
 
 	@Override
 	public void keyReleased(KeyEvent e) {
-	}	
+	}
 }
