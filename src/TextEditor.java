@@ -1,11 +1,11 @@
 import java.awt.*;
-import java.awt.datatransfer.Clipboard;
 import java.awt.event.*;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
+
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.border.CompoundBorder;
@@ -14,24 +14,18 @@ import javax.swing.border.LineBorder;
 import javax.swing.event.*;
 import javax.swing.filechooser.*;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.DefaultEditorKit;
-import javax.swing.text.Document;
 import javax.swing.text.EditorKit;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
-import javax.swing.text.StyleConstants.ColorConstants;
 import javax.swing.text.StyledDocument;
 import javax.swing.text.StyledEditorKit;
-import javax.swing.text.html.HTML;
-import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.rtf.RTFEditorKit;
 
-public class TextEditor<Mediator> extends JFrame implements ActionListener, CaretListener, ChangeListener, KeyListener {
+public class TextEditor extends JFrame implements ActionListener, CaretListener, ChangeListener, KeyListener {
 
+	JFrame frame;
+	
 	ArrayList<JTextPane> textPanes = new ArrayList<JTextPane>();
-	//JTextPane textArea[];
-	//JScrollPane textAreaScrollPane[];
 	ArrayList<JScrollPane> scrollPanes = new ArrayList<JScrollPane>();
 	JScrollPane mainScrollPane;
 	JLabel fontLabel;
@@ -48,7 +42,6 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 	JButton fontItalicButton;
 	JButton fontUnderlineButton;
 	JButton imageButton;
-	JButton hyperlinkButton;
 	JComboBox<?> fontFamilyBox;
 	JTextField fontFamilyBoxTextField;
 	JPanel headerPanel;
@@ -69,14 +62,17 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 	int end;
 	boolean justSelected = false;
 	String lastCopied = "";
+	String copy = "";
 	
 	JScrollPane currentScrollPane;
 	JTextPane currentTextPane;
 
 	TextEditor() {
-		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		this.setTitle("Poop Text Editor");
-		this.setLayout(new BorderLayout());
+		
+		frame = new JFrame();
+		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		frame.setTitle("Poop Text Editor");
+		frame.setLayout(new BorderLayout());
 		
 		headerPanel = new JPanel();
 		headerPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 15));
@@ -155,10 +151,6 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 		imageButton = new JButton("Image...");
 		imageButton.addActionListener(this);
 		imageButton.setBackground(new Color(255, 255, 255));
-		
-		hyperlinkButton = new JButton("Link");
-		hyperlinkButton.addActionListener(this);
-		hyperlinkButton.setBackground(new Color(255, 255, 255));
 		
 		fontIndentLabel = new JLabel("Indent:");
 		fontIndentLabel.setFont(new Font("Arial", Font.PLAIN, 16));
@@ -242,10 +234,9 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 
 		// ----- /menubar -----
 
-		this.setJMenuBar(menuBar);
+		frame.setJMenuBar(menuBar);
 		
-		this.add(headerPanel, BorderLayout.NORTH);
-		//headerPanel.add(fontLabel);
+		frame.add(headerPanel, BorderLayout.NORTH);
 		
 		headerPanel.add(fontColorButton);
 		headerPanel.add(fontFamilyBox);
@@ -258,12 +249,11 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 		headerPanel.add(lineSpacingLabel);
 		headerPanel.add(lineSpacingSpinner);
 		headerPanel.add(imageButton);
-		//headerPanel.add(hyperlinkButton);
 		
-		this.add(mainScrollPane, BorderLayout.CENTER);		
-		this.setSize(1100, 1100);
-		this.setLocationRelativeTo(null);
-		this.setVisible(true);
+		frame.add(mainScrollPane, BorderLayout.CENTER);		
+		frame.setSize(1100, 1100);
+		frame.setLocationRelativeTo(null);
+		frame.setVisible(true);
 	}
 
 	@Override
@@ -379,26 +369,6 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 				currentTextPane.insertIcon ( new ImageIcon (fileChooser.getSelectedFile().getAbsolutePath()) );				
 			}
 		}
-		
-		// ---------------------------------------------------------------------------------------------------------------------------
-		// ----------------------LINK-------------------------------------------------------------------------------------
-		// ---------------------------------------------------------------------------------------------------------------------------
-
-		if (e.getSource() == hyperlinkButton) {
-			
-			HTMLEditorKit htmlkit = new HTMLEditorKit();
-			currentTextPane.setEditorKit(htmlkit);
-			try {
-				htmlkit.insertHTML((HTMLDocument)currentTextPane.getDocument(), 0, "<html> Website : <a href=\"\">http://www.google.com/</a></html>", 0, 0, null);
-			} catch (BadLocationException | IOException e1) {
-				e1.printStackTrace();
-			}
-			
-			EditorKit kit = new StyledEditorKit();
-			currentTextPane.setEditorKit(kit);
-			//currentTextPane.setText("<html> Website : <a href=\"\">http://www.google.com/</a></html>");
-			//currentTextPane.insertIcon(new ImageIcon(fileChooser.getSelectedFile().getAbsolutePath()));
-		}
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 		// ----------------------NEW-------------------------------------------------------------------------------------------------
@@ -406,20 +376,7 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 
 		if (e.getSource() == newItem) {
 			
-			bodyPanel.removeAll();
-			textPanes.removeAll(textPanes);
-			scrollPanes.removeAll(scrollPanes);
-
-			StyleConstants.setFontSize(attr, 14);
-			StyleConstants.setFontFamily(attr, "Times New Roman");
-			StyleConstants.setBold(attr, false);
-			attr.addAttribute(StyleConstants.Bold, false);
-			attr.addAttribute(StyleConstants.Italic, false);
-			attr.addAttribute(StyleConstants.Underline, false);
-			attr.addAttribute(StyleConstants.LeftIndent, 0f);
-			attr.addAttribute(StyleConstants.LineSpacing, 0f);
-			attr.removeAttribute(StyleConstants.Foreground);
-
+			ClearAll();
 			CreateNewPage(1);
 		}
 
@@ -431,42 +388,70 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 			
 			JFileChooser fileChooser = new JFileChooser();
 			fileChooser.setCurrentDirectory(new File("."));
-			FileNameExtensionFilter filter = new FileNameExtensionFilter("Text files", "txt");
+			FileNameExtensionFilter filter = new FileNameExtensionFilter("Poop Text Editor files", "pte");
 			fileChooser.setFileFilter(filter);
 
 			int response = fileChooser.showOpenDialog(null);
+			ArrayList<File> files = new ArrayList<File>();
 
 			if (response == JFileChooser.APPROVE_OPTION) {
-				InputStream file = null;
+				ClearAll();
 
 				try {
-					file = new FileInputStream(fileChooser.getSelectedFile().getAbsolutePath());
-				} catch (FileNotFoundException e1) {
-					e1.printStackTrace();
-				}
+					File zippedFile = new File(fileChooser.getSelectedFile().getAbsolutePath());
+					byte[] buffer = new byte[2048];
 
-				try {
+					ZipInputStream zis = new ZipInputStream(new FileInputStream(zippedFile));
+					ZipEntry zipEntry = zis.getNextEntry();
+					while (zipEntry != null) {
+						if (zipEntry.isDirectory())
+							continue;
+						else {
+							File newFile = new File(zipEntry.getName());
+							FileOutputStream fos = new FileOutputStream(newFile);
+							int len;
+							while ((len = zis.read(buffer)) > 0)
+								fos.write(buffer, 0, len);
 
-					EditorKit editorKit = new HTMLEditorKit();
-					StyledDocument doc = (StyledDocument) editorKit.createDefaultDocument();
-
-					currentTextPane.setEditorKit(editorKit);
-					System.out.println("read file");
-					currentTextPane.read(file, doc);
-					System.out.println("set doc");
-					currentTextPane.setDocument(doc);
-					System.out.println("new doc");
-
+							fos.close();
+							
+							files.add(newFile);
+						}
+						
+						zipEntry = zis.getNextEntry();
+					}
 				} catch (IOException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				} finally {}
+				
+				
+				try {
+					for (int i = 0; i < files.size(); i++) {
+
+						CreateNewPage(i + 1);
+
+						EditorKit editorKit = new RTFEditorKit();
+						StyledDocument doc = (StyledDocument) editorKit.createDefaultDocument();
+
+						//currentTextPane.setEditorKit(editorKit);
+						editorKit.read(new FileInputStream(files.get(i)), doc, 0);
+						currentTextPane.setDocument(doc);
+
+						//currentTextPane.setEditorKit(new StyledEditorKit());
+					}
+				} catch (IOException | BadLocationException e1) {
+					// TODO Auto-generated catch block
 					e1.printStackTrace();
 				} finally {
-
-					try {
-						file.close();
-					} catch (IOException e1) {
-						e1.printStackTrace();
-					}
 				}
+				
+				SwingUtilities.invokeLater(new Runnable() {
+					public void run() {
+						SwingUtilities.updateComponentTreeUI(bodyPanel);
+						pack();
+					}
+				});
 			}
 		}
 
@@ -477,25 +462,56 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 		if (e.getSource() == saveItem) {
 			JFileChooser fileChooser = new JFileChooser();
 			fileChooser.setCurrentDirectory(new File("."));
+			FileNameExtensionFilter filter = new FileNameExtensionFilter("Poop Text Editor files", "pte");
+			fileChooser.setFileFilter(filter);
 
 			int response = fileChooser.showSaveDialog(null);
+			File fileRaw = null;
 
 			if (response == JFileChooser.APPROVE_OPTION) {
-				File file;
-				PrintWriter fileOut = null;
-
-				file = new File(fileChooser.getSelectedFile().getAbsolutePath());
+				
 				try {
-					fileOut = new PrintWriter(file);
-
-					EditorKit editorKit = new HTMLEditorKit();
-					editorKit.write(fileOut, textPanes.get(0).getStyledDocument(), 0,
-							currentTextPane.getStyledDocument().getLength());
-
-				} catch (IOException | BadLocationException e1) {
+					FileOutputStream fos = new FileOutputStream(fileChooser.getSelectedFile().getAbsolutePath() + ".pte");
+					ZipOutputStream zipOut = new ZipOutputStream(fos);
+					
+					for (int i = 0; i < textPanes.size(); i++) {
+						
+						fileRaw = new File(fileChooser.getSelectedFile().getAbsolutePath() + ".page" + i);
+						
+						try {
+							
+							ByteArrayOutputStream bos  = new ByteArrayOutputStream();
+							EditorKit editorKit = new RTFEditorKit();							
+							editorKit.write(bos, textPanes.get(i).getStyledDocument(), 0,
+									textPanes.get(i).getStyledDocument().getLength());
+							
+							PrintWriter fileOut = new PrintWriter(fileRaw);
+							fileOut.write(bos.toString());
+							
+							fileOut.close();
+							
+						} catch (IOException | BadLocationException e1) {
+							e1.printStackTrace();
+						}
+						
+						FileInputStream fis = new FileInputStream(fileRaw);
+						ZipEntry zipEntpy = new ZipEntry(fileChooser.getSelectedFile().getName() + ".page" + i);
+						zipOut.putNextEntry(zipEntpy);
+						byte[] bytes = new byte[2048];
+						int length;
+						while((length = fis.read(bytes)) >= 0) {
+							zipOut.write(bytes, 0, length);
+						}
+						fis.close();	
+						fileRaw.delete();
+					}
+					
+					zipOut.close();
+					fos.close();
+					
+				} catch (IOException e1) {
+					// TODO Auto-generated catch block
 					e1.printStackTrace();
-				} finally {
-					fileOut.close();
 				}
 			}
 		}
@@ -531,7 +547,7 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 		//System.out.println("Caret: " + currentTextPane.getCaretPosition());
 
 		if (textArea.getSelectedText() == null) {
-
+			
 			if (textArea.getText().length() > 0 && textArea.getCaretPosition() != caretPosition) {
 				
 				start = textArea.getCaretPosition();
@@ -800,10 +816,6 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 		try {		
 			lastLineBreak = tempTextPane.getDocument().getText(0, tempTextPane.getDocument().getLength())
 					.lastIndexOf('\n');
-		
-			
-			/*System.out.println(tempTextPane.getStyledDocument().getText(lastLineBreak + 1,
-					tempTextPane.getDocument().getLength() - lastLineBreak - 1));*/
 			
 			copy = tempTextPane.getStyledDocument().getText(lastLineBreak + 1,
 					tempTextPane.getDocument().getLength() - lastLineBreak);
@@ -813,11 +825,7 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 			tempTextPane.getDocument().remove(lastLineBreak,
 					tempTextPane.getDocument().getLength() - lastLineBreak);
 			
-			//System.out.println("Lenth: " + tempTextPane.getDocument().getLength());
-			
 		} catch (BadLocationException e1) {
-			
-			System.out.println("Error on index: " + index);
 			e1.printStackTrace();
 		}
 		
@@ -826,7 +834,10 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 		if(index == textPanes.size() - 1) {
 					
 			//System.out.println("Creating new page");
-			CreateNewPage(index + 2);		
+			CreateNewPage(index + 2);	
+			
+			if(copy.length() == 1)
+				textPanes.get(index + 1).requestFocus();
 		}
 		
 		//System.out.println("Transfering text to index: " + (index + 1));
@@ -845,11 +856,15 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 			currentScrollPane = scrollPanes.get(scrollPanes.size() - 1);
 			currentTextPane = textPanes.get(textPanes.size() - 1);
 						
-			SwingUtilities.updateComponentTreeUI(this);
-			currentScrollPane.requestFocus();
+			SwingUtilities.invokeLater(new Runnable() {
+				public void run() {
+					SwingUtilities.updateComponentTreeUI(bodyPanel);
+					pack();
+				}
+			});
 			
-		}
-		
+			currentScrollPane.requestFocus();			
+		}		
 	}
 
 	public void CreateNewPage(int pageNumber) {
@@ -858,77 +873,23 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 		newTextPane.setCharacterAttributes(attr, rootPaneCheckingEnabled);
 		newTextPane.addCaretListener(this);
 		newTextPane.addKeyListener(this);
-		newTextPane.setEditable(true);
 		
-		Action action = new AbstractAction() {
-
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				
-				//System.out.println(newTextPane.getSelectedText());
-				
-				try 
-			    {
-			        //Clipboard clpbrd = Toolkit.getDefaultToolkit().getSystemClipboard();
-					RTFEditorKit rtfek = new RTFEditorKit();
-					HTMLEditorKit kit = new HTMLEditorKit();
-					
-			        ByteArrayOutputStream bos  = new ByteArrayOutputStream();
-			        Writer writer = new StringWriter();
-			        
-			        rtfek.write ( bos, newTextPane.getStyledDocument(), 0, 0);
-			        kit.write ( writer, newTextPane.getStyledDocument(), 0, 0);
-			        
-			        System.out.println(writer.toString());
-			        
-			        ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
-			        
-			        newTextPane.setText("");
-			        
-			        rtfek.read(bis, newTextPane.getStyledDocument(), 0);
-			        bos.flush();
-			    }
-			    catch ( IOException | BadLocationException e1 ) 
-			    {
-			        e1.printStackTrace();
-			    }
-				
-			}};
-		KeyStroke keyStroke = KeyStroke.getKeyStroke("control C");
 		InputMap im = newTextPane.getInputMap();
-		newTextPane.getActionMap().put(im.get(keyStroke), action);
-		/*newTextPane.addHyperlinkListener(new HyperlinkListener() {
-
-            @Override
-            public void hyperlinkUpdate(HyperlinkEvent e) {
-            	
-            	System.out.println("YAY");
-            	
-                if (!HyperlinkEvent.EventType.ACTIVATED.equals(e.getEventType()))
-                    return;
-                if ("action:close".equals(e.getDescription())) {
-                	
-                } else {
-                    if (Desktop.isDesktopSupported()) {
-                        try {
-                            Desktop.getDesktop().browse(e.getURL().toURI());
-                        } catch (Exception ignore) {
-                        }
-                    }
-                }
-            }
-        });*/
-		textPanes.add(newTextPane);
 		
-		EditorKit kit = new StyledEditorKit();
-		newTextPane.setEditorKit(kit);
+		KeyStroke keyStrokeCopy = KeyStroke.getKeyStroke("control C");
+		newTextPane.getActionMap().put(im.get(keyStrokeCopy), copyAction);
+		
+		KeyStroke keyStrokePaste = KeyStroke.getKeyStroke("control V");
+		newTextPane.getActionMap().put(im.get(keyStrokePaste), pasteAction);
+	
+		textPanes.add(newTextPane);
+		//newTextPane.setEditorKit(new StyledEditorKit());
 
 		Border emptyBorder = new EmptyBorder(0, 0, 0, 0);
 		Border lineBorder = new LineBorder(Color.white, 0) {
 			@Override
 			public void paintBorder(final Component c, final Graphics g, final int x, final int y, final int width,
 					final int height) {
-				// super.paintBorder(c, g, x, y, width, height);
 				final boolean doSimple = true;
 				if (doSimple) {
 					g.setColor(Color.white);
@@ -970,14 +931,128 @@ public class TextEditor<Mediator> extends JFrame implements ActionListener, Care
 	
 		currentScrollPane = newScrollPane;
 		currentTextPane = newTextPane;
-		currentTextPane.requestFocus();
+		//currentTextPane.requestFocus();
 	}
-	
-	@Override
-	public void keyTyped(KeyEvent e) {
+
+	public boolean isNumeric(String str) {
+		try {
+			Double.parseDouble(str);
+			return true;
+		} catch (NumberFormatException e) {
+			return false;
+		}
 	}
 
 	@Override
-	public void keyReleased(KeyEvent e) {
+	public void keyTyped(KeyEvent e) {}
+
+	@Override
+	public void keyReleased(KeyEvent e) {}
+	
+	public void ClearAll() {
+		bodyPanel.removeAll();
+		textPanes.removeAll(textPanes);
+		scrollPanes.removeAll(scrollPanes);
+
+		StyleConstants.setFontSize(attr, 14);
+		StyleConstants.setFontFamily(attr, "Times New Roman");
+		StyleConstants.setBold(attr, false);
+		attr.addAttribute(StyleConstants.Bold, false);
+		attr.addAttribute(StyleConstants.Italic, false);
+		attr.addAttribute(StyleConstants.Underline, false);
+		attr.addAttribute(StyleConstants.LeftIndent, 0f);
+		attr.addAttribute(StyleConstants.LineSpacing, 0f);
+		attr.removeAttribute(StyleConstants.Foreground);
 	}
+
+	Action copyAction = new AbstractAction() {
+
+		@Override
+		public void actionPerformed(ActionEvent e) {
+
+			JTextPane newTextPane = (JTextPane) e.getSource();
+
+			if (start == end)
+				return;
+
+			try {
+				RTFEditorKit rtfek = new RTFEditorKit();
+				StyledEditorKit kit = new StyledEditorKit();
+
+				ByteArrayOutputStream bos = new ByteArrayOutputStream();
+				Writer writer = new StringWriter();
+
+				rtfek.write(bos, newTextPane.getStyledDocument(), start, end - start);
+				kit.write(writer, newTextPane.getStyledDocument(), start, end - start);
+
+				copy = bos.toString();
+				String search = writer.toString();
+
+				if (!copy.contains(search)) {
+					JOptionPane.showMessageDialog(frame, "Copy error");
+					return;
+				}
+
+				int startSubs1 = copy.indexOf(search);
+				int endSubs1 = startSubs1;
+				int startSubs2 = startSubs1;
+				int endSubs2 = startSubs1 + search.length();
+
+				for (int i = startSubs1; i > 0; i--) {
+
+					if (copy.charAt(i) == ' ' && startSubs2 == startSubs1)
+						startSubs2 = i;
+					else if (copy.charAt(i) == ' ')
+						endSubs1 = i - 1;
+
+					if (copy.charAt(i) == '\\' && copy.charAt(i + 1) == 'f'
+							&& isNumeric(Character.toString(copy.charAt(i + 2)))) {
+						startSubs1 = i;
+						break;
+					}
+				}
+
+				int endOfNecessary = 0;
+				int counter = 0;
+				for (int i = 0; i < copy.length(); i++) {
+
+					if (copy.charAt(i) == '{' || copy.charAt(i) == '}')
+						counter++;
+
+					if (counter == 5) {
+						endOfNecessary = i;
+						break;
+					}
+				}
+
+				copy = copy.substring(0, endOfNecessary + 1) + "\n\n" + copy.substring(startSubs1, endSubs1)
+						+ copy.substring(startSubs2, endSubs2);
+			} catch (IOException | BadLocationException e1) {
+				e1.printStackTrace();
+			}
+
+		}
+	};
+
+	Action pasteAction = new AbstractAction() {
+
+		@Override
+		public void actionPerformed(ActionEvent e) {
+
+			JTextPane newTextPane = (JTextPane) e.getSource();
+
+			if (copy.length() == 0)
+				return;
+
+			try {
+				RTFEditorKit rtfek = new RTFEditorKit();
+				ByteArrayInputStream bis = new ByteArrayInputStream(copy.getBytes());
+				System.out.println(copy);
+				rtfek.read(bis, newTextPane.getStyledDocument(), start);
+			} catch (IOException | BadLocationException e1) {
+				e1.printStackTrace();
+			}
+
+		}
+	};
 }
