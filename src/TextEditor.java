@@ -365,7 +365,8 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 			if (response == JFileChooser.APPROVE_OPTION) {
 				InputStream file = null;
-
+				
+				System.out.println(currentTextPane.getStyledDocument());
 				currentTextPane.insertIcon ( new ImageIcon (fileChooser.getSelectedFile().getAbsolutePath()) );				
 			}
 		}
@@ -467,6 +468,7 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 
 			int response = fileChooser.showSaveDialog(null);
 			File fileRaw = null;
+			//File fileRawTXT = null;
 
 			if (response == JFileChooser.APPROVE_OPTION) {
 				
@@ -477,6 +479,7 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 					for (int i = 0; i < textPanes.size(); i++) {
 						
 						fileRaw = new File(fileChooser.getSelectedFile().getAbsolutePath() + ".page" + i);
+						//fileRawTXT = new File(fileChooser.getSelectedFile().getAbsolutePath() + i + ".txt");
 						
 						try {
 							
@@ -488,7 +491,11 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 							PrintWriter fileOut = new PrintWriter(fileRaw);
 							fileOut.write(bos.toString());
 							
+							//PrintWriter fileOutTXT = new PrintWriter(fileRawTXT);
+							//fileOutTXT.write(bos.toString());
+							
 							fileOut.close();
+							//fileOutTXT.close();
 							
 						} catch (IOException | BadLocationException e1) {
 							e1.printStackTrace();
@@ -988,7 +995,7 @@ public class TextEditor extends JFrame implements ActionListener, CaretListener,
 				copy = bos.toString();
 				String search = writer.toString();
 
-				if (!copy.contains(search)) {
+				if (!copy.contains(search.substring(0, search.length() - 2))) {	
 					JOptionPane.showMessageDialog(frame, "Copy error");
 					return;
 				}
